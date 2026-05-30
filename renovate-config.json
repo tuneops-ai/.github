@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Org-wide Renovate defaults for tuneops-ai. Repos that want Renovate extend from this via `\"extends\": [\"github>tuneops-ai/.github:renovate-config\"]`. Per CHORE-493c2 + F-09cb6.",
+
+  "enabledManagers": ["gomod"],
+
+  "schedule": ["after 6am and before 10am every weekday"],
+
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 8,
+  "rangeStrategy": "pin",
+
+  "packageRules": [
+    {
+      "description": "tuneops-ai internal Go libraries — group + manual review per F-09cb6",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github.com/tuneops-ai/"],
+      "groupName": "tuneops internal libraries",
+      "automerge": false,
+      "labels": ["dependencies", "tuneops-internal"]
+    },
+    {
+      "description": "Pre-release alpha/beta tags — never auto-bump (F-09cb6 versioning policy)",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github.com/tuneops-ai/"],
+      "matchUpdateTypes": ["pin", "digest"],
+      "automerge": false
+    }
+  ],
+
+  "labels": ["dependencies"],
+
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dependency Dashboard"
+}

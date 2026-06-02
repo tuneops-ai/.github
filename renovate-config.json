@@ -1,35 +1,66 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Org-wide Renovate defaults for tuneops-ai. Repos that want Renovate extend from this via `\"extends\": [\"github>tuneops-ai/.github:renovate-config\"]`. Per CHORE-493c2 + F-09cb6.",
-
-  "enabledManagers": ["gomod"],
-
-  "schedule": ["after 6am and before 10am every weekday"],
-
-  "prHourlyLimit": 4,
-  "prConcurrentLimit": 8,
-  "rangeStrategy": "pin",
-
+  "description": "TuneOps org-level Renovate preset. Encodes the policy from tuneops-docs/workspace/design/RENOVATE_POLICY.md (Phase 0 decisions D1-D3) and the versioning tiers from tuneops-workspace/.claude/rules/versioning-policy.md (F-09cb6). Consumed by every tuneops-ai repo via `extends: [\"github>tuneops-ai/.github:renovate-config\"]`. Upgraded 2026-06-02 from the CHORE-493c2 minimal config to full Phase C policy.",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "docker:pinDigests"
+  ],
+  "labels": ["dependencies"],
+  "timezone": "UTC",
+  "schedule": ["before 6am on Monday"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dependency Dashboard",
+  "dependencyDashboardApproval": true,
+  "gomod": {
+    "enabled": true,
+    "postUpdateOptions": ["gomodTidy"]
+  },
   "packageRules": [
     {
-      "description": "tuneops-ai internal Go libraries — group + manual review per F-09cb6",
+      "description": "Phase C Stage 1 — Dashboard mode. Every detected update lands as a checkbox on the Dependency Dashboard issue first. PRs only open when the box is checked. To flip a repo to PR mode (Stage 2), override `dependencyDashboardApproval: false` in that repo's renovate.json.",
+      "matchPackageNames": ["*"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Security advisories — auto-merge regardless of update type, off-schedule. CVE response time matters more than review cadence.",
+      "matchCategories": ["security"],
+      "automerge": true,
+      "automergeType": "pr",
+      "schedule": ["at any time"],
+      "dependencyDashboardApproval": false
+    },
+    {
+      "description": "External (non-TuneOps) patch + pin + digest updates — auto-merge when CI green per RENOVATE_POLICY.md D2.",
+      "matchManagers": ["gomod", "npm", "dockerfile", "github-actions", "pip_requirements", "pep621"],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "matchPackageNames": ["!github.com/tuneops-ai/**"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "TuneOps internal pre-release libraries (-alpha.N / -beta.N) — always manual per F-09cb6. CRD/wire-contract repos where 'patch' can mean schema-field-semantics-changed.",
       "matchManagers": ["gomod"],
-      "matchPackagePatterns": ["^github.com/tuneops-ai/"],
+      "matchPackageNames": ["github.com/tuneops-ai/**"],
+      "matchCurrentVersion": "/-(alpha|beta|rc)\\./",
+      "automerge": false
+    },
+    {
+      "description": "TuneOps internal plain pre-1.0 libraries — manual initially. Promote to automerge-patch only after 2 weeks of green Renovate PRs per RENOVATE_POLICY.md D2.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/tuneops-ai/**"],
       "groupName": "tuneops internal libraries",
       "automerge": false,
       "labels": ["dependencies", "tuneops-internal"]
     },
     {
-      "description": "Pre-release alpha/beta tags — never auto-bump (F-09cb6 versioning policy)",
-      "matchManagers": ["gomod"],
-      "matchPackagePatterns": ["^github.com/tuneops-ai/"],
-      "matchUpdateTypes": ["pin", "digest"],
-      "automerge": false
+      "description": "Minor and major updates — always human review regardless of source.",
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false,
+      "separateMajorMinor": true
     }
   ],
-
-  "labels": ["dependencies"],
-
-  "dependencyDashboard": true,
-  "dependencyDashboardTitle": "Renovate Dependency Dashboard"
+  "rangeStrategy": "pin"
 }

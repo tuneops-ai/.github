@@ -1,0 +1,32 @@
+// Self-hosted Renovate bootstrap config.
+//
+// This is the config that `renovatebot/github-action` reads when it
+// starts up — NOT a preset extended by other repos. It exists only
+// inside the runner. Each discovered repo's own `renovate.json` still
+// extends `github>tuneops-ai/.github:renovate-config` (the published
+// org preset), so the runner-level config is intentionally minimal.
+//
+// Filed under BUG-5eb26.
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  description: 'Self-hosted Renovate bootstrap. Per-repo presets live in github>tuneops-ai/.github:renovate-config, consumed via each repo\'s renovate.json.',
+
+  // Forward to the org preset on every repo Renovate discovers.
+  // This is REDUNDANT with each repo's existing `extends` line — but
+  // including it here guarantees the preset is loaded even if a repo's
+  // renovate.json is somehow missing the extends line.
+  extends: ['local>tuneops-ai/.github:renovate-config'],
+
+  // Defensive: even if onboarding is disabled at the workflow-env level,
+  // belt-and-suspenders here so we never accidentally open a "Configure
+  // Renovate" PR on every repo.
+  onboarding: false,
+  requireConfig: 'required',
+
+  // platform is GitHub (inferred from token, but explicit is safer).
+  platform: 'github',
+
+  // Don't open onboarding PRs even if a repo lacks renovate.json. We
+  // only want to act on repos that explicitly opted in.
+  forkProcessing: 'disabled',
+}

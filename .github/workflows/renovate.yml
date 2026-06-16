@@ -1,0 +1,108 @@
+# Self-hosted Renovate
+#
+# Background: Mend's hosted Renovate App (id 136786406) is installed on the
+# org with `repository_selection: all` and the right permissions, but the
+# bot has been silent since install on 2026-05-30 — no PRs, no Dependency
+# Dashboard issues, no onboarding flow on any tuneops-ai repo. Cause is
+# upstream (Mend's queue / scheduler) and not introspectable from CLI;
+# Mend's dashboard requires browser auth.
+#
+# This workflow gives us an org-owned Renovate that:
+#   - reads the same `renovate-config.json` org preset every repo already
+#     extends (no per-repo changes needed)
+#   - auto-discovers every tuneops-ai repo that has a `renovate.json`
+#   - runs on a schedule matching what the Mend preset declared
+#     (`before 6am on Monday`)
+#   - authenticates as the `tuneops-ci-bot` GitHub App (the same App used
+#     for cross-repo CI auth per F-9a7bf — already installed org-wide with
+#     contents:write, pull_requests:write, issues:write)
+#
+# Filed under BUG-5eb26. Dry-run by default so we can verify behavior
+# before unleashing it on every repo; flip `dryRun: false` once we've
+# confirmed it produces the expected dashboard issues / PRs and we're
+# ready to uninstall the Mend App (or to coexist if Mend resumes).
+name: Renovate
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Renovate log level'
+        type: choice
+        default: info
+        options: [debug, info, warn]
+      dryRun:
+        description: 'Dry run (no PRs/issues opened)'
+        type: choice
+        default: 'full'
+        options:
+          # 'null'  → not a dry run (live mode; opens real PRs + issues)
+          # 'full'  → no GitHub mutations at all
+          # 'lookup'→ scan + report but no PR open
+          - 'null'
+          - 'full'
+          - 'lookup'
+      autodiscoverFilter:
+        description: 'Repo glob (default: all tuneops-ai repos)'
+        type: string
+        default: 'tuneops-ai/*'
+  # NOTE: schedule is intentionally not enabled in the first ship.
+  # After we verify the dispatch-mode runs produce the expected PRs/
+  # dashboards, uncomment the schedule block below.
+  # schedule:
+  #   - cron: '0 5 * * 1'   # 05:00 UTC every Monday (1h before the
+  #                         # `before 6am on Monday` constraint in the
+  #                         # org preset, so the run completes by 6am).
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run at a time per ref to avoid duplicate work if dispatch is
+  # spammed manually.
+  group: renovate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Mint App installation token (tuneops-ci-bot)
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          # Org-scoped App with contents:write + pull_requests:write +
+          # issues:write — same App used by every other cross-repo CI
+          # workflow in the org (F-9a7bf).
+          app-id: ${{ vars.TUNEOPS_CI_BOT_APP_ID }}
+          private-key: ${{ secrets.TUNEOPS_CI_BOT_PRIVATE_KEY }}
+          owner: tuneops-ai
+
+      - name: Renovate
+        uses: renovatebot/github-action@v40.3.0
+        with:
+          # The config file at the repo root that renovatebot/github-action
+          # reads at startup. This is the runner's config, NOT the
+          # consumed preset — see renovate-self-hosted.json5 below for
+          # the actual self-hosted bootstrap config.
+          configurationFile: renovate-self-hosted.json5
+          token: ${{ steps.app-token.outputs.token }}
+        env:
+          RENOVATE_AUTODISCOVER: 'true'
+          RENOVATE_AUTODISCOVER_FILTER: ${{ inputs.autodiscoverFilter }}
+          RENOVATE_LOG_LEVEL: ${{ inputs.logLevel }}
+          # `dryRun` values:
+          #   null    → live mode (open PRs + issues)
+          #   full    → no GitHub mutations
+          #   lookup  → scan + report only (still no mutations)
+          RENOVATE_DRY_RUN: ${{ inputs.dryRun == 'null' && '' || inputs.dryRun }}
+          # Each discovered repo's own renovate.json extends the org
+          # preset (github>tuneops-ai/.github:renovate-config). This is
+          # the SAME preset Mend's hosted bot would have used — we just
+          # provide the runner.
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_REQUIRE_CONFIG: 'required'

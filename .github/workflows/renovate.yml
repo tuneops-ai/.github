@@ -55,6 +55,14 @@ on:
 
 permissions:
   contents: read
+  # CHORE-c517f: packages:read unlocks the workflow's GITHUB_TOKEN as a valid
+  # principal for GHCR /v2 reads. Path E in R-110 — App installation tokens
+  # don't work against GHCR's Docker registry (confirmed GitHub platform bug,
+  # community/discussions#171423), so the GHCR-specific hostRule below uses
+  # GITHUB_TOKEN instead of the App token. The per-package "Manage Actions
+  # access" grants on the 7 tuneops-ai/* private packages (added 2026-06-16)
+  # authorize this workflow's GITHUB_TOKEN to pull tag metadata.
+  packages: read
 
 concurrency:
   # One run at a time per ref to avoid duplicate work if dispatch is
@@ -105,21 +113,27 @@ jobs:
           # provide the runner.
           RENOVATE_ONBOARDING: 'false'
           RENOVATE_REQUIRE_CONFIG: 'required'
-          # CHORE-52ebd: authenticate Renovate to GHCR for private
-          # tuneops-ai/* container packages. tuneops-ci-bot has
-          # packages:read at the App level.
+          # CHORE-c517f / R-110: GHCR auth uses the workflow's GITHUB_TOKEN,
+          # NOT the tuneops-ci-bot App token.
           #
-          # GHCR's Docker Registry v2 API expects a bearer token via the
-          # standard token-exchange flow, NOT basic auth. The first
-          # attempt used username/password (basic) which produced 403:
+          # Background: a confirmed GitHub platform bug
+          # (community/discussions#171423) makes `packages:read` on App
+          # installation tokens silently broken at GHCR's Docker registry
+          # backend. CHORE-52ebd tried both Basic-auth (got 403) and
+          # Bearer-auth (got 401 on /token endpoint) forms with the App
+          # token; both failed at the GHCR backend's permission layer,
+          # not at the auth-shape layer.
           #
-          #   GET https://ghcr.io/v2/tuneops-ai/<pkg>/tags/list
-          #   → 403 ERR_NON_2XX_3XX_RESPONSE (Datasource unauthorized)
+          # GITHUB_TOKEN IS honored by GHCR's backend (special-cased in
+          # GitHub's runtime). The "Manage Actions access" UI grants on
+          # the 7 private packages (added 2026-06-16) authorize this
+          # specific workflow's GITHUB_TOKEN to pull tag metadata.
           #
-          # `token` in hostRules sends `Authorization: Bearer <token>`
-          # directly, matching GHCR's expected auth model and how the
-          # github-actions ecosystem's docker login uses GITHUB_TOKEN.
-          # Each Mend-Renovate cycle re-mints the App installation token
-          # so the secret is short-lived (~1h).
+          # The App token (steps.app-token.outputs.token) continues to
+          # power everything else — autodiscover, repo init, PR creation,
+          # Dashboard issue updates. Renovate's hostRules scope auth per
+          # matchHost, so this hostRule's GITHUB_TOKEN only applies to
+          # ghcr.io. Two credentials, two scopes, no security regression
+          # on the F-9a7bf App-token migration.
           RENOVATE_HOST_RULES: |
-            [{"matchHost":"ghcr.io","token":"${{ steps.app-token.outputs.token }}"}]
+            [{"matchHost":"ghcr.io","hostType":"docker","username":"x-access-token","password":"${{ secrets.GITHUB_TOKEN }}"}]

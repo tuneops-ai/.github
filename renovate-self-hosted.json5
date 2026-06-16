@@ -6,10 +6,10 @@
 // extends `github>tuneops-ai/.github:renovate-config` (the published
 // org preset), so the runner-level config is intentionally minimal.
 //
-// Filed under BUG-5eb26.
+// Filed under BUG-5eb26. Extended for BUG-99113 (peer-marker fix).
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
-  description: 'Self-hosted Renovate bootstrap. Per-repo presets live in github>tuneops-ai/.github:renovate-config, consumed via each repo\'s renovate.json.',
+  description: "Self-hosted Renovate bootstrap. Per-repo presets live in github>tuneops-ai/.github:renovate-config, consumed via each repo's renovate.json.",
 
   // Forward to the org preset on every repo Renovate discovers.
   // This is REDUNDANT with each repo's existing `extends` line — but
@@ -29,4 +29,33 @@
   // Don't open onboarding PRs even if a repo lacks renovate.json. We
   // only want to act on repos that explicitly opted in.
   forkProcessing: 'disabled',
+
+  // BUG-99113: ensure Renovate's lockfile regeneration uses the same
+  // node/npm version as dev + CI (node 25 / npm 11.x).
+  //
+  // The default `binarySource: 'global'` makes Renovate use whatever
+  // node/npm comes pre-baked in the `ghcr.io/renovatebot/renovate:latest`
+  // container — currently an older npm that strips `peer: true` markers
+  // from package-lock.json. Local dev (npm 11.6.2 / node 25.2.1) and
+  // tuneops-desktop CI (node-version: '25' in ci.yml → npm 11.x) both
+  // preserve those markers. The mismatch produced a phantom diff on
+  // every dev pull-and-build after tuneops-desktop#451 merged.
+  //
+  // `binarySource: 'install'` tells Renovate to install matching tools
+  // at runtime via the containerbase substrate. The version it installs
+  // is selected from (in priority order):
+  //   1. The project's package.json `engines.node` field
+  //   2. The `constraints.node` value below (this file)
+  //   3. Renovate's default LTS
+  //
+  // tuneops-desktop's frontend/package.json doesn't currently declare
+  // `engines` (filed as sister work on Clyde's side). Until it does,
+  // `constraints.node` below is the live signal. Once `engines.node`
+  // lands on the desktop side, that becomes authoritative and this
+  // `constraints.node` is a fallback for repos that don't declare
+  // engines explicitly.
+  binarySource: 'install',
+  constraints: {
+    node: '>=25 <26',
+  },
 }

@@ -34,7 +34,7 @@ on:
       dryRun:
         description: 'Dry run (no PRs/issues opened)'
         type: choice
-        default: 'full'
+        default: 'null'
         options:
           # 'null'  → not a dry run (live mode; opens real PRs + issues)
           # 'full'  → no GitHub mutations at all
@@ -46,13 +46,12 @@ on:
         description: 'Repo glob (default: all tuneops-ai repos)'
         type: string
         default: 'tuneops-ai/*'
-  # NOTE: schedule is intentionally not enabled in the first ship.
-  # After we verify the dispatch-mode runs produce the expected PRs/
-  # dashboards, uncomment the schedule block below.
-  # schedule:
-  #   - cron: '0 5 * * 1'   # 05:00 UTC every Monday (1h before the
-  #                         # `before 6am on Monday` constraint in the
-  #                         # org preset, so the run completes by 6am).
+  schedule:
+    # 05:00 UTC every Monday — 1h before the `before 6am on Monday`
+    # constraint declared in the org preset (renovate-config.json),
+    # so the scheduled run completes inside the preset's window.
+    # CHORE-52ebd enabled after BUG-5eb26 verification × 2 was green.
+    - cron: '0 5 * * 1'
 
 permissions:
   contents: read
@@ -106,3 +105,15 @@ jobs:
           # provide the runner.
           RENOVATE_ONBOARDING: 'false'
           RENOVATE_REQUIRE_CONFIG: 'required'
+          # CHORE-52ebd: authenticate Renovate to GHCR for private
+          # tuneops-ai/* container packages. tuneops-ci-bot already has
+          # packages:read; pass its short-lived installation token as the
+          # docker registry password so the F-c0edc sortable-tag custom-
+          # manager regex can resolve the latest tag of each pin in
+          # pkg/containerimages/containerimages.yaml. Without this rule
+          # Renovate's Dashboard warns:
+          #   "Failed to look up docker package ghcr.io/tuneops-ai/<pkg>:
+          #    no-result"
+          # for each of the 7 private packages we ship from the org.
+          RENOVATE_HOST_RULES: |
+            [{"matchHost":"ghcr.io","username":"x-access-token","password":"${{ steps.app-token.outputs.token }}"}]

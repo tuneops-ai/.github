@@ -41,25 +41,26 @@
       "automergeType": "pr"
     },
     {
-      "description": "TuneOps internal pre-release libraries (-alpha.N / -beta.N) — always manual per F-09cb6. CRD/wire-contract repos where 'patch' can mean schema-field-semantics-changed.",
+      "description": "TuneOps internal pre-release libraries (-alpha.N / -beta.N) — Stage 2a (CHORE-460f7): PR mode ON (dependencyDashboardApproval:false → Renovate opens the bump PR), but automerge stays FALSE — always human-merged per F-09cb6. CRD/wire-contract repos where 'patch' can mean schema-field-semantics-changed; these never auto-merge.",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["github.com/tuneops-ai/**"],
       "matchCurrentVersion": "/-(alpha|beta|rc)\\./",
+      "dependencyDashboardApproval": false,
       "automerge": false
     },
     {
-      "description": "TuneOps internal plain pre-1.0 libraries — manual initially. Promote to automerge-patch only after 2 weeks of green Renovate PRs per RENOVATE_POLICY.md D2.",
+      "description": "TuneOps internal plain pre-1.0 libraries — Stage 2a (CHORE-460f7): PR mode ON (dependencyDashboardApproval:false), automerge still FALSE (human-merged). Stage 2b promotes patch → automerge-on-green after ~2 weeks of OBSERVED green internal Renovate PRs (RENOVATE_POLICY.md D2); until then there is no green-PR track record to promote on. The shipped-app pin (tuneops-desktop) keeps a human gate via its own repo override.",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["github.com/tuneops-ai/**"],
       "groupName": "tuneops internal libraries",
+      "dependencyDashboardApproval": false,
       "automerge": false,
       "labels": ["dependencies", "tuneops-internal"]
     },
     {
-      "description": "Minor and major updates — always human review regardless of source.",
+      "description": "Minor and major updates — always human review regardless of source (never automerge). separateMajorMinor is a global default (true), not valid inside a matchUpdateTypes rule — removed (was a latent config-validator error, fixed under CHORE-460f7).",
       "matchUpdateTypes": ["minor", "major"],
-      "automerge": false,
-      "separateMajorMinor": true
+      "automerge": false
     }
   ],
   "rangeStrategy": "pin"

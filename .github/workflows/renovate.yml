@@ -13,9 +13,8 @@
 #   - auto-discovers every tuneops-ai repo that has a `renovate.json`
 #   - runs on a schedule matching what the Mend preset declared
 #     (`before 6am on Monday`)
-#   - authenticates as the `tuneops-ci-bot` GitHub App (the same App used
-#     for cross-repo CI auth per F-9a7bf — already installed org-wide with
-#     contents:write, pull_requests:write, issues:write)
+#   - authenticates as the dedicated `tuneops-renovate-bot` GitHub App
+#     (B-9260e; tuneops-ci-bot stays least-privilege, S-4666a)
 #
 # Filed under BUG-5eb26. Dry-run by default so we can verify behavior
 # before unleashing it on every repo; flip `dryRun: false` once we've
@@ -78,20 +77,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Mint App installation token (tuneops-ci-bot)
+      - name: Mint App installation token (tuneops-renovate-bot)
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
-          # Org-scoped App with contents:write + pull_requests:write +
-          # issues:write — same App used by every other cross-repo CI
-          # workflow in the org (F-9a7bf).
-          app-id: ${{ vars.TUNEOPS_CI_BOT_APP_ID }}
-          private-key: ${{ secrets.TUNEOPS_CI_BOT_PRIVATE_KEY }}
+          # B-9260e: a DEDICATED App, not tuneops-ci-bot. Renovate's initRepo
+          # GraphQL query always reads repository.issues (Dependency
+          # Dashboard), so the token needs issues:write. tuneops-ci-bot is
+          # held to the S-4666a least-privilege set; BUG-793f0 removed
+          # issues:write from it on 2026-06-30 and every run since 2026-07-06
+          # failed with platform-unknown-error.
+          client-id: ${{ vars.RENOVATE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RENOVATE_BOT_PRIVATE_KEY }}
           owner: tuneops-ai
+          # Request exactly what Renovate uses. A permission the App lacks
+          # fails THIS step by name, not as an opaque per-repo
+          # platform-unknown-error inside Renovate.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-workflows: write
+          permission-checks: read
+          permission-statuses: read
+          permission-metadata: read
+          # Security PRs read Dependabot alerts (B-9260e AC-9).
+          permission-vulnerability-alerts: read
 
       - name: Renovate
-        uses: renovatebot/github-action@v40.3.0
+        uses: renovatebot/github-action@v46.3.13
         with:
+          # B-9260e: pin the engine. v40.3.0 ran renovate:latest, so the
+          # engine changed under every scheduled run with no commit here.
+          # Bump deliberately.
+          renovate-version: 44.227.3
           # The config file at the repo root that renovatebot/github-action
           # reads at startup. This is the runner's config, NOT the
           # consumed preset — see renovate-self-hosted.json5 below for

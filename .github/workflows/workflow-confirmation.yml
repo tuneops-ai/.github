@@ -1,0 +1,77 @@
+# Workflow confirmation (local) — B-eec44.
+#
+# tuneops-ai/.github is public. The org ruleset's required "Workflow review (org)" workflow lives in
+# private tuneops-ci and never starts here, so this repo is excluded from that ruleset and keeps the same
+# rule with this self-contained check (bash + jq + gh, nothing private reused):
+#
+#   A PR that touches .github/workflows/** or .github/actions/** carries a '## Workflow confirmation'
+#   block in its body whose
+#     confirmed-by:  is a listed confirmer AND the PR's author, and
+#     head:          is a prefix (>= 7 hex chars) of the PR's current head SHA.
+#
+# A new push needs a fresh block. The body and head are read live from the API, so a re-run judges the
+# current PR, not the event that started it. Not checked (accepted, B-eec44): that the block lists the
+# surfaces the diff really changes — the AtTune workflow-surface banner names them at session time.
+name: Workflow confirmation (local)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  confirm:
+    name: Workflow confirmation (local)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the confirmation block
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          CONFIRMERS: zavale
+        run: |
+          set -euo pipefail
+          pr_json=$(gh api "repos/$REPO/pulls/$PR")
+          author=$(jq -r '.user.login' <<<"$pr_json")
+          head_sha=$(jq -r '.head.sha' <<<"$pr_json")
+          body=$(jq -r '.body // ""' <<<"$pr_json" | tr -d '\r')
+
+          touched=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' \
+            | grep -E '^\.github/(workflows|actions)/' || true)
+          if [ -z "$touched" ]; then
+            echo "No workflow or action file changed: nothing to confirm."
+            exit 0
+          fi
+          echo "Workflow/action files changed:"
+          printf '  %s\n' "${touched//$'\n'/$'\n'  }"
+
+          block=$(awk '/^## Workflow confirmation[[:space:]]*$/{f=1;next} /^## /{f=0} f' <<<"$body")
+          fail() {
+            echo "::error title=Workflow confirmation (local)::$1"
+            echo "Add to the PR body, as the PR's author ($author):"
+            echo "## Workflow confirmation"
+            echo "confirmed-by: $author"
+            echo "head: ${head_sha:0:7}"
+            exit 1
+          }
+          [ -n "$block" ] || fail "no '## Workflow confirmation' block in the PR body"
+
+          by=$(sed -n 's/^confirmed-by:[[:space:]]*\([^[:space:]]*\).*/\1/p' <<<"$block" | head -1)
+          head=$(sed -n 's/^head:[[:space:]]*\([0-9a-fA-F]*\).*/\1/p' <<<"$block" | head -1)
+
+          case ",$CONFIRMERS," in
+            *",$by,"*) ;;
+            *) fail "confirmed-by '$by' is not a listed confirmer ($CONFIRMERS)" ;;
+          esac
+          [ "$by" = "$author" ] || fail "confirmed-by '$by' is not the PR's author '$author'"
+          [ "${#head}" -ge 7 ] || fail "head '$head' is shorter than 7 hex characters"
+          case "$head_sha" in
+            "$head"*) ;;
+            *) fail "head '$head' is not the PR's current head ${head_sha:0:7} (a new push needs a fresh block)" ;;
+          esac
+          echo "Confirmed by $by at head ${head_sha:0:7}."

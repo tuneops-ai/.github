@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "TuneOps org-level Renovate preset. Encodes the policy from tuneops-docs/workspace/design/RENOVATE_POLICY.md (Phase 0 decisions D1-D3) and the versioning tiers from tuneops-workspace/.claude/rules/versioning-policy.md (F-09cb6). Consumed by every tuneops-ai repo via `extends: [\"github>tuneops-ai/.github:renovate-config\"]`. Upgraded 2026-06-02 from the CHORE-493c2 minimal config to full Phase C policy.",
+  "description": "TuneOps org-level Renovate preset. Encodes the policy from tuneops-docs/workspace/design/RENOVATE_POLICY.md (Phase 0 decisions D1-D3) and the versioning tiers from tuneops-workspace/.claude/rules/versioning-policy.md (F-09cb6). Consumed by every tuneops-ai repo via `extends: [\"github>tuneops-ai/.github:renovate-config\"]`. B-9260e revival (CEO 2026-11-10): Renovate opens PRs and merges nothing; third-party dependencies only — github.com/tuneops-ai/** belongs to the Go bump bot (deps/tuneops-bump).",
   "extends": [
     "config:recommended",
     "helpers:pinGitHubActionDigests",
@@ -14,6 +14,9 @@
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "Renovate Dependency Dashboard",
   "dependencyDashboardApproval": true,
+  "automerge": false,
+  "platformAutomerge": false,
+  "rebaseWhen": "conflicted",
   "gomod": {
     "enabled": true,
     "postUpdateOptions": ["gomodTidy"]
@@ -25,41 +28,21 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Security advisories — auto-merge regardless of update type, off-schedule. CVE response time matters more than review cadence.",
-      "matchCategories": ["security"],
-      "automerge": true,
-      "automergeType": "pr",
-      "schedule": ["at any time"],
-      "dependencyDashboardApproval": false
-    },
-    {
-      "description": "External (non-TuneOps) patch + pin + digest updates — auto-merge when CI green per RENOVATE_POLICY.md D2.",
-      "matchManagers": ["gomod", "npm", "dockerfile", "github-actions", "pip_requirements", "pep621"],
-      "matchUpdateTypes": ["patch", "pin", "digest"],
-      "matchPackageNames": ["!github.com/tuneops-ai/**"],
-      "automerge": true,
-      "automergeType": "pr"
-    },
-    {
-      "description": "TuneOps internal pre-release libraries (-alpha.N / -beta.N) — Stage 2a (CHORE-460f7): PR mode ON (dependencyDashboardApproval:false → Renovate opens the bump PR), but automerge stays FALSE — always human-merged per F-09cb6. CRD/wire-contract repos where 'patch' can mean schema-field-semantics-changed; these never auto-merge.",
-      "matchManagers": ["gomod"],
+      "description": "B-9260e: TuneOps internal Go modules belong to the Go bump bot (reusable-go-dependency-bump, rolling deps/tuneops-bump PR, C-a09ae). Renovate ignores them so the two never open duplicate PRs. Supersedes the CHORE-460f7 Stage-2a rules.",
       "matchPackageNames": ["github.com/tuneops-ai/**"],
-      "matchCurrentVersion": "/-(alpha|beta|rc)\\./",
+      "enabled": false
+    },
+    {
+      "description": "Security advisories — the PR opens off-schedule with no dashboard approval (CVE response time matters). B-9260e: it does NOT auto-merge; a session merges it on green through the AtTune merge gates.",
+      "matchCategories": ["security"],
+      "schedule": ["at any time"],
       "dependencyDashboardApproval": false,
+      "labels": ["dependencies", "security"],
       "automerge": false
     },
     {
-      "description": "TuneOps internal plain pre-1.0 libraries — Stage 2a (CHORE-460f7): PR mode ON (dependencyDashboardApproval:false), automerge still FALSE (human-merged). Stage 2b promotes patch → automerge-on-green after ~2 weeks of OBSERVED green internal Renovate PRs (RENOVATE_POLICY.md D2); until then there is no green-PR track record to promote on. The shipped-app pin (tuneops-desktop) keeps a human gate via its own repo override.",
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["github.com/tuneops-ai/**"],
-      "groupName": "tuneops internal libraries",
-      "dependencyDashboardApproval": false,
-      "automerge": false,
-      "labels": ["dependencies", "tuneops-internal"]
-    },
-    {
-      "description": "Minor and major updates — always human review regardless of source (never automerge). separateMajorMinor is a global default (true), not valid inside a matchUpdateTypes rule — removed (was a latent config-validator error, fixed under CHORE-460f7).",
-      "matchUpdateTypes": ["minor", "major"],
+      "description": "B-9260e: no rule may merge. External patch/pin/digest updates were auto-merged on green (RENOVATE_POLICY.md D2); revisit after ~2 weeks of observed green PRs, and give merge-on-green to Mergify (F-82ef5 AC-9), one automerger.",
+      "matchUpdateTypes": ["patch", "pin", "digest", "minor", "major"],
       "automerge": false
     }
   ],
